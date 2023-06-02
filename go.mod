@@ -1,4 +1,4 @@
-module github.com/hujun-open/nacjac
+module github.com/hujun-open/shouchan
 
 go 1.20
 

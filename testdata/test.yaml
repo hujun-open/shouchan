@@ -1,0 +1,4 @@
+name: nameFromFile
+addr: addrFromFile
+employer:
+    name: comFromFile

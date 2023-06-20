@@ -15,6 +15,7 @@ type testStruct struct {
 	Name, Addr string
 	Employer   company
 	JoinTime   time.Time
+	NumList    []int
 }
 
 func (t testStruct) isEqual(peer testStruct) bool {
@@ -111,7 +112,7 @@ func TestSconf(t *testing.T) {
 		{ // case 4, mix arg and default, arg should win
 			def:   defCnf,
 			fpath: "",
-			args:  []string{"-name", "nameFromArg", "-employer-name", "argCom"},
+			args:  []string{"-name", "nameFromArg", "-employername", "argCom"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "nameFromArg",

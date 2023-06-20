@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/hujun-open/extyaml"
-	"github.com/itzg/go-flagsfiller"
+	"github.com/hujun-open/myflags"
 )
 
 const (
@@ -25,7 +24,7 @@ type SConfInt interface {
 type SConf[T any] struct {
 	conf         T
 	confFilePath string
-	filler       *flagsfiller.FlagSetFiller
+	filler       *myflags.Filler
 	fset         *flag.FlagSet
 }
 
@@ -41,8 +40,7 @@ func NewSConf[T any](def T, defpath string, fset *flag.FlagSet) (*SConf[T], erro
 	r.conf = def
 	r.confFilePath = defpath
 	r.fset = fset
-	r.filler = flagsfiller.New(flagsfiller.WithFieldRenamer(
-		strings.ToLower))
+	r.filler = myflags.NewFiller()
 	err := r.filler.Fill(fset, r.conf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fill flagset, %w", err)

@@ -17,12 +17,9 @@ include support following field types:
 - integer types
 - float type
 - string
-- time.Time
 - time.Duration
-- net.IP
-- net.IPNet
-- net.HardwareAddr (MAC addr)
 - and all types that implement `encoding.TextMarshaler` and `encoding.TextUnmarshaler` interface
+- there is also `github.com/hujun-open/shouchantypes` include some other types
 
 Additional types could be supported by using `Register`, see [types.go](types.go) for example. 
 
@@ -43,6 +40,7 @@ import (
 	"time"
 
 	"github.com/hujun-open/shouchan"
+	_ "github.com/hujun-open/shouchantypes"
 )
 
 type Company struct {

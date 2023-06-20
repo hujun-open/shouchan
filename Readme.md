@@ -21,7 +21,7 @@ include support following field types:
 - and all types that implement `encoding.TextMarshaler` and `encoding.TextUnmarshaler` interface
 - there is also `github.com/hujun-open/shouchantypes` include some other types
 
-Additional types could be supported by using `Register`, see [types.go](types.go) for example. 
+Additional types could be supported by using `Register`, see [github.com/hujun-open/shouchantypes](https://github.com/hujun-open/shouchantypes) for example. 
 
 struct field naming:
   
@@ -40,7 +40,7 @@ import (
 	"time"
 
 	"github.com/hujun-open/shouchan"
-	_ "github.com/hujun-open/shouchantypes"
+	_ "github.com/hujun-open/shouchantypes" //import addtional types
 )
 
 type Company struct {

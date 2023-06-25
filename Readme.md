@@ -30,6 +30,7 @@ struct field naming:
 
 
 
+
 ## Simple Example:
 ```
 package main
@@ -231,3 +232,6 @@ goroutine 1 [running]:
 main.main()
         C:/hujun/gomodules/src/shouchan/cmd/test/main.go:50 +0x365
 ```
+
+## Code Generation
+shouchan also provides a code generation tool to deal with large amount of constants, see [codegen](./codegen/) folder.

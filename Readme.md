@@ -234,4 +234,4 @@ main.main()
 ```
 
 ## Code Generation
-shouchan also provides a code generation tool to deal with large amount of constants, see [codegen](./codegen/) folder.
+shouchan also provides a code generation tool to deal with large amount of constants, see [shouchangen](https://github.com/hujun-open/shouchangen).

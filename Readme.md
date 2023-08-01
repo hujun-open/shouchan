@@ -139,6 +139,8 @@ final result is &{Name:nameFromFile Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:
 ```
 /*
 This example demonstrate an zip file utility has two actions: show and zip, each action has different configuration via struct zipShowCfg and zipArchiveCfg.
+Basic idea is to define a struct that implements shouchan.ActionConfig interface for each action
+
 */
 package main
 
@@ -162,6 +164,9 @@ func (zscfg *zipShowCfg) Default() *zipShowCfg {
 func (zacfg zipShowCfg) DefaultCfgFilePath() string {
 	return ""
 }
+func (zacfg zipShowCfg) ActionName() string {
+	return "show"
+}
 
 type zipArchiveCfg struct {
 	Folder, Zipf string
@@ -177,12 +182,15 @@ func (zacfg *zipArchiveCfg) Default() *zipArchiveCfg {
 func (zacfg zipArchiveCfg) DefaultCfgFilePath() string {
 	return ""
 }
+func (zacfg zipArchiveCfg) ActionName() string {
+	return "zip"
+}
 
 func main() {
 	//create an ActionConf with a map 
-	acnf, err := shouchan.NewActionConfWithCMDLine(map[string]shouchan.ConfigWithDefCfgFilePath{
-		"show": (&zipShowCfg{}).Default(),
-		"zip":  (&zipArchiveCfg{}).Default(),
+	acnf, err := shouchan.NewActionConfWithCMDLine([]shouchan.ActionConfig{
+		(&zipShowCfg{}).Default(),
+		(&zipArchiveCfg{}).Default(),
 	})
 	if err != nil {
 		panic(err)

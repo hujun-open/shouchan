@@ -29,6 +29,9 @@ func (zscfg *zipShowCfg) Default() *zipShowCfg {
 func (zacfg zipShowCfg) DefaultCfgFilePath() string {
 	return ""
 }
+func (zacfg zipShowCfg) ActionName() string {
+	return "show"
+}
 
 type zipArchiveCfg struct {
 	Folder, Zipf string
@@ -44,11 +47,14 @@ func (zacfg *zipArchiveCfg) Default() *zipArchiveCfg {
 func (zacfg zipArchiveCfg) DefaultCfgFilePath() string {
 	return ""
 }
+func (zacfg zipArchiveCfg) ActionName() string {
+	return "zip"
+}
 
 func doActionTest(t *testing.T, setup testActionSetup) error {
-	acnf, err := NewActionConfWithCMDLine(map[string]ConfigWithDefCfgFilePath{
-		"show": (&zipShowCfg{}).Default(),
-		"zip":  (&zipArchiveCfg{}).Default(),
+	acnf, err := NewActionConfWithCMDLine([]ActionConfig{
+		(&zipShowCfg{}).Default(),
+		(&zipArchiveCfg{}).Default(),
 	})
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package shouchan
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ ActionConf allows user to specify a map betweening an action(string) with *SConf
 type ActionConf struct {
 	//can't use *Sconf[any] here, see https://stackoverflow.com/questions/71399641/why-a-generic-cant-be-assigned-to-another-even-if-their-type-arguments-can
 	list         map[string]*Action
+	orderedList  []string //used to preserve the oder of action as it gets added, so that usage output is consistent
 	loadedAction string
 }
 
@@ -35,20 +37,22 @@ func newActionConf() *ActionConf {
 	return r
 }
 
-type ConfigWithDefCfgFilePath interface {
+type ActionConfig interface {
 	DefaultCfgFilePath() string //return "" to be ignored
+	ActionName() string
 }
 
-// newActionConfWithMap creates ActionConf via list, key is the action, value is the a config struct implements ConfigWithDefCfgFilePath interface.
-func newActionConfWithMap(list map[string]ConfigWithDefCfgFilePath) (*ActionConf, error) {
+// newActionConfWithList creates ActionConf via list, key is the action, value is the a config struct implements ConfigWithDefCfgFilePath interface.
+func newActionConfWithList(list []ActionConfig, options ...SconfOption[ActionConfig]) (*ActionConf, error) {
 	r := newActionConf()
 	var err error
-	for action, v := range list {
-		r.list[action] = &Action{
-			name: action,
-			fset: flag.NewFlagSet(action+"-flagset", flag.ContinueOnError),
+	for _, action := range list {
+		r.orderedList = append(r.orderedList, action.ActionName())
+		r.list[action.ActionName()] = &Action{
+			name: action.ActionName(),
+			fset: flag.NewFlagSet(action.ActionName()+"-flagset", flag.ContinueOnError),
 		}
-		r.list[action].sconf, err = NewSConf(v, "", r.list[action].fset)
+		r.list[action.ActionName()].sconf, err = NewSConf(action, r.list[action.ActionName()].fset, options...)
 		if err != nil {
 			return nil, err
 		}
@@ -57,14 +61,16 @@ func newActionConfWithMap(list map[string]ConfigWithDefCfgFilePath) (*ActionConf
 }
 
 // NewActionConfWithCMDLine creates ActionConf via list, key is the action, value is the a config struct implements ConfigWithDefCfgFilePath interface.
-func NewActionConfWithCMDLine(list map[string]ConfigWithDefCfgFilePath) (*ActionConf, error) {
-	acnf, err := newActionConfWithMap(list)
+func NewActionConfWithCMDLine(list []ActionConfig, options ...SconfOption[ActionConfig]) (*ActionConf, error) {
+	acnf, err := newActionConfWithList(list, options...)
 	if err != nil {
 		return nil, err
 	}
-	flag.CommandLine.Usage = acnf.printUsage
+	flag.CommandLine.Usage = acnf.PrintUsage
 	return acnf, nil
 }
+
+var ErrEmptyArg = errors.New("empty argument list")
 
 /*
 Read loads configuration from args and/or config file
@@ -78,7 +84,7 @@ return following errors:
 */
 func (acnf *ActionConf) Read(args []string) (actionerr, ferr, aerr error) {
 	if len(args) == 0 {
-		return nil, nil, fmt.Errorf("empty argument list")
+		return nil, nil, ErrEmptyArg
 	}
 	switch len(acnf.list) {
 	case 0:
@@ -92,7 +98,7 @@ func (acnf *ActionConf) Read(args []string) (actionerr, ferr, aerr error) {
 	default:
 		action := strings.TrimSpace(args[0])
 		if action == "-?" {
-			acnf.printUsage()
+			acnf.PrintUsage()
 			return nil, nil, nil
 		}
 		if scnf, ok := acnf.list[action]; ok {
@@ -123,15 +129,12 @@ func (acnf *ActionConf) GetLoadedConf() any {
 	return nil
 }
 
-func (acnf *ActionConf) printUsage() {
+// PrintUsage print out the usage
+func (acnf *ActionConf) PrintUsage() {
 	fmt.Println("Usage: <action> [<parameters...>]")
-	nameList := []string{}
-	for name := range acnf.list {
-		nameList = append(nameList, name)
-	}
-	fmt.Printf("Actions: %s\n", strings.Join(nameList, "|"))
+	fmt.Printf("Actions: %s\n", strings.Join(acnf.orderedList, "|"))
 	fmt.Println("Action specific usage:")
-	for _, name := range nameList {
+	for _, name := range acnf.orderedList {
 		fmt.Printf("= %v\n", name)
 		acnf.list[name].sconf.printUsage()
 		fmt.Println()

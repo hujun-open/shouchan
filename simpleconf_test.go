@@ -43,7 +43,9 @@ type testSetup struct {
 
 func doTest(t *testing.T, setup testSetup) error {
 	fset := flag.NewFlagSet("testflagset", flag.ContinueOnError)
-	cnf, err := NewSConf(&setup.def, setup.fpath, fset)
+	cnf, err := NewSConf(&setup.def, fset,
+		WithConfigFile[*testStruct](true),
+		WithDefaultConfigFilePath[*testStruct](setup.fpath))
 	if err != nil {
 		return err
 	}

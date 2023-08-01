@@ -26,21 +26,39 @@ type SConf[T any] struct {
 	confFilePath string
 	filler       *myflags.Filler
 	fset         *flag.FlagSet
+	useConfFile  bool
+}
+
+type SconfOption[T any] func(ec *SConf[T])
+
+func WithConfigFile[T any](allow bool) SconfOption[T] {
+	return func(ec *SConf[T]) {
+		ec.useConfFile = allow
+	}
+}
+
+func WithDefaultConfigFilePath[T any](def string) SconfOption[T] {
+	return func(ec *SConf[T]) {
+		ec.confFilePath = def
+	}
 }
 
 // NewSConf returns a new SConf instance,
 // def is a pointer to configruation struct with default value,
 // defpath is the default configuration file path, it could be overriden by using command line arg "-f", could be "" means no default path
 // fset is the flagset to bind
-func NewSConf[T any](def T, defpath string, fset *flag.FlagSet) (*SConf[T], error) {
+func NewSConf[T any](def T, fset *flag.FlagSet, options ...SconfOption[T]) (*SConf[T], error) {
 	if reflect.TypeOf(def).Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("def is not a ptr")
 	}
 	r := new(SConf[T])
 	r.conf = def
-	r.confFilePath = defpath
 	r.fset = fset
 	r.filler = myflags.NewFiller()
+	r.useConfFile = true
+	for _, o := range options {
+		o(r)
+	}
 	err := r.filler.Fill(fset, r.conf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fill flagset, %w", err)
@@ -50,8 +68,8 @@ func NewSConf[T any](def T, defpath string, fset *flag.FlagSet) (*SConf[T], erro
 }
 
 // NewSConfCMDLine is same as NewSConf, just use flag.CommandLine as the flagset
-func NewSConfCMDLine[T any](def T, defpath string) (*SConf[T], error) {
-	return NewSConf(def, defpath, flag.CommandLine)
+func NewSConfCMDLine[T any](def T, options ...SconfOption[T]) (*SConf[T], error) {
+	return NewSConf(def, flag.CommandLine, options...)
 }
 
 func getConfFilePath(args []string) (string, []string) {
@@ -72,17 +90,19 @@ func (cnf *SConf[T]) Read(args []string) (ferr, aerr error) {
 	var buf []byte
 	fpath := cnf.confFilePath
 	newargs := args
-	if fpath == "" {
-		fpath, newargs = getConfFilePath(args)
-	}
-	if fpath != "" {
-		buf, ferr = os.ReadFile(fpath)
-		if ferr != nil {
-			ferr = fmt.Errorf("failed to open config file %v, %w", fpath, ferr)
-		} else {
-			ferr = cnf.UnmarshalYAML(buf)
+	if cnf.useConfFile {
+		if fpath == "" {
+			fpath, newargs = getConfFilePath(args)
+		}
+		if fpath != "" {
+			buf, ferr = os.ReadFile(fpath)
 			if ferr != nil {
-				ferr = fmt.Errorf("failed to decode %v as YAML, %w", fpath, ferr)
+				ferr = fmt.Errorf("failed to open config file %v, %w", fpath, ferr)
+			} else {
+				ferr = cnf.UnmarshalYAML(buf)
+				if ferr != nil {
+					ferr = fmt.Errorf("failed to decode %v as YAML, %w", fpath, ferr)
+				}
 			}
 		}
 	}
@@ -93,7 +113,9 @@ func (cnf *SConf[T]) Read(args []string) (ferr, aerr error) {
 func (cnf *SConf[T]) printUsage() {
 	indent := "  "
 	fmt.Println("Usage:")
-	fmt.Printf("%v-f <filepath> : read from config file <filepath>\n", indent)
+	if cnf.useConfFile {
+		fmt.Printf("%v-f <filepath> : read from config file <filepath>\n", indent)
+	}
 	cnf.fset.VisitAll(func(f *flag.Flag) {
 		fmt.Printf("%v-%v <%v> : %v\n", indent, f.Name,
 			reflect.Indirect(reflect.ValueOf(f.Value)).Kind(),

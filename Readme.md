@@ -9,9 +9,6 @@ Package shouchan provides simple configuration management for Golang application
   - read configuration from command line flag and/or YAML file, mix&match, into a struct
   - 3 sources: default value, YAML file and flag
   - priority:in case of multiple source returns same config struct field, the preference is flag over YAML over default value
-  - support following use cases:
-	- simple: single action & single configuration, via SConf
-	- multiple: multiple actions & multiple configurations, via ActionConf
 
 include support following field types:
 - integer types
@@ -23,15 +20,15 @@ include support following field types:
 
 Additional types could be supported by using `Register`, see [github.com/hujun-open/shouchantypes](https://github.com/hujun-open/shouchantypes) for example. 
 
-struct field naming:
-  
-  - YAML: lowercase
-  - flag: lowercase, for nested struct field, it is "-<struct_fieldname_level_0>-<struct_fieldname_level_1>...", see example below:
+## CLI & YAML Support
+
+- YAML: shouchan uses [extyaml](https://pkg.go.dev/github.com/hujun-open/extyaml) for YAML marshal and unmarshal 
+- CLI Flag: shouchan uses [myflags](https://pkg.go.dev/github.com/hujun-open/myflags) for command line flag generation
+
+refer to corresponding doc for details on CLI & YAML support. 
 
 
-
-
-## Simple Example:
+## Example:
 ```
 package main
 
@@ -131,114 +128,6 @@ final result is &{Name:nameFromArg Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:1
 .\test.exe -f ..\..\testdata\test.yaml -employer-name comFromArg
 ferr <nil>,aerr <nil>
 final result is &{Name:nameFromFile Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromArg}}
-```
-
-
-## Multiple Actions/Configurations Example
-
-```
-/*
-This example demonstrate an zip file utility has two actions: show and zip, each action has different configuration via struct zipShowCfg and zipArchiveCfg.
-Basic idea is to define a struct that implements shouchan.ActionConfig interface for each action
-
-*/
-package main
-
-import (
-	"fmt"
-
-	"github.com/hujun-open/shouchan"
-)
-
-type zipShowCfg struct {
-	Zipf, Fname string
-}
-
-func (zscfg *zipShowCfg) Default() *zipShowCfg {
-	return &zipShowCfg{
-		Zipf:  "defaultShowZipf",
-		Fname: "defaultShowFname",
-	}
-}
-
-func (zacfg zipShowCfg) DefaultCfgFilePath() string {
-	return ""
-}
-func (zacfg zipShowCfg) ActionName() string {
-	return "show"
-}
-
-type zipArchiveCfg struct {
-	Folder, Zipf string
-}
-
-func (zacfg *zipArchiveCfg) Default() *zipArchiveCfg {
-	return &zipArchiveCfg{
-		Zipf:   "defaultArchiveZipf",
-		Folder: "defaultArchiveFolder",
-	}
-}
-
-func (zacfg zipArchiveCfg) DefaultCfgFilePath() string {
-	return ""
-}
-func (zacfg zipArchiveCfg) ActionName() string {
-	return "zip"
-}
-
-func main() {
-	//create an ActionConf with a map 
-	acnf, err := shouchan.NewActionConfWithCMDLine([]shouchan.ActionConfig{
-		(&zipShowCfg{}).Default(),
-		(&zipArchiveCfg{}).Default(),
-	})
-	if err != nil {
-		panic(err)
-	}
-	err, ferr, aerr := acnf.ReadwithCMDLine()
-	if err!=nil {
-		panic(err)
-	}
-	fmt.Println("loading errors:",ferr, aerr)
-	fmt.Printf("loaded action %v config is %+v", acnf.GetLoadedAction(), acnf.GetLoadedConf())
-}
-
-```
-the command line looks like following:
-```
-Usage: <action> [<parameters...>]
-Actions: show|zip
-Action specific usage:
-= show
-Usage:
-  -f <filepath> : read from config file <filepath>
-  -fname <string> :
-        default:defaultShowFname
-  -zipf <string> :
-        default:defaultShowZipf
-
-= zip
-Usage:
-  -f <filepath> : read from config file <filepath>
-  -folder <string> :
-        default:defaultArchiveFolder
-  -zipf <string> :
-        default:defaultArchiveZipf
-```
-some CLI runs:
-```
-test.exe zip -folder testmy -zipf testmy.zip
-<nil> <nil> <nil>
-loaded action zip config is &{Folder:testmy Zipf:testmy.zip}
-```
-
-```
-test.exe wrong
-panic: wrong is not a valid action, use -? for list of actions
-
-goroutine 1 [running]:
-main.main()
-        C:/hujun/gomodules/src/shouchan/cmd/test/main.go:50 +0x365
 ```
 
 ## Code Generation

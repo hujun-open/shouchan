@@ -86,48 +86,54 @@ Output:
 ```	
  .\test.exe -?
 flag provided but not defined: -?
-Usage:
-  -f <filepath> : read from config file <filepath>
-  -addr <string> : employee address
-        default:defAddr
-  -employer-name <string> : company name
+shouchan example
+  - addr: employee address
+        default:defAddrPointer
+  - employer-name: company name
         default:defCom
-  -ipaddr <struct> : employee IP address
+  - ipaddr: employee IP address
         default:1.2.3.4
-  -jointtime <struct> : employee join time
-        default:2023-01-02 13:22:33 +0000 UTC
-  -mac <struct> : employee MAC address
+  - jointtime: employee join time
+        default:2023-01-02 13:22:33
+  - mac: employee MAC address
         default:11:22:33:44:55:66
-  -name <string> : employee name
+  - n2addr:
+        default:1.1.1.1
+  - naddr:
+        default:2.2.2.2
+  - name: employee name
         default:defName
-  -subnet <struct> : employee IP subnet
+  - subnet: employee IP subnet
         default:192.168.1.0/24
+
+  -cfgfromfile: load configuration from the specified file
+        default:test.yaml
 ```    
 
 - no command line args, no config file, default is used
 ```
  .\test.exe   
-ferr <nil>,aerr <nil>
-final result is &{Name:defName Addr:defAddr IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:defCom}}
+ferr failed to open config file test.yaml, open test.yaml: The system cannot find the file specified.,aerr <nil>
+final result is &{Name:defName Addr:0xc0000528b0 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:defCom}}
 ```
 
 - config file via "-f" command args, value from file take procedence
 ```
-.\test.exe -f ..\..\testdata\test.yaml
+ .\test.exe -cfgfromfile cfg.yaml
 ferr <nil>,aerr <nil>
-final result is &{Name:nameFromFile Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
+final result is &{Name:nameFromFile Addr:0xc0000528b0 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
 ```
 - mix command line args and config file, args to override employee name:
 ```
- .\test.exe -f ..\..\testdata\test.yaml -name nameFromArg
+.\test.exe -cfgfromfile cfg.yaml -name nameFromArg
 ferr <nil>,aerr <nil>
-final result is &{Name:nameFromArg Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
+final result is &{Name:nameFromArg Addr:0xc000088880 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
 ```
 - mix command line args and config file, args to override company name:
 ```
-.\test.exe -f ..\..\testdata\test.yaml -employer-name comFromArg
+.\test.exe -cfgfromfile cfg.yaml -employer-name comFromArg
 ferr <nil>,aerr <nil>
-final result is &{Name:nameFromFile Addr:addrFromFile IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromArg}}
+final result is &{Name:nameFromFile Addr:0xc000104880 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromArg}}
 ```
 
 ## Code Generation

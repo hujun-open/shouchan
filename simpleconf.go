@@ -60,6 +60,7 @@ func NewSConf[T any](def T, name, usage string, options ...SconfOption[T]) (*SCo
 	if err != nil {
 		return nil, fmt.Errorf("failed to fill flagset, %w", err)
 	}
+	r.filler.GetFlagset().Usage = r.PrintUsage
 	return r, nil
 }
 
@@ -110,7 +111,8 @@ func (cnf *SConf[T]) PrintUsage() {
 }
 
 func (cnf *SConf[T]) UsageStr(prefix string) string {
-	return cnf.filler.UsageStr("")
+	return cnf.filler.UsageStr("") + fmt.Sprintf("\n  %v: load configuration from the specified file\n        default:%v",
+		cnf.configFileFlagName, cnf.defConfFilePath)
 }
 
 // ReadCMDLine is same as Read, expcept the args is os.Args[1:]

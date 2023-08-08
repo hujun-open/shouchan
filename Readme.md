@@ -29,57 +29,8 @@ refer to corresponding doc for details on CLI & YAML support.
 
 
 ## Example:
-```
-package main
+https://github.com/hujun-open/shouchan/blob/809751e636ae1230134d11983523ec5d8a2b24e6/example/main.go#L1-L57
 
-import (
-	"fmt"
-	"net"
-	"time"
-
-	"github.com/hujun-open/shouchan"
-	_ "github.com/hujun-open/shouchantypes" //import addtional types
-)
-
-type Company struct {
-	//the usage tag is used for command line usage
-	Name string `usage:"company name"`
-}
-
-type Employee struct {
-	Name      string           `usage:"employee name"`
-	Addr      string           `usage:"employee address"`
-	IPAddr    net.IP           `usage:"employee IP address"`
-	Subnet    net.IPNet        `usage:"employee IP subnet"`
-	MAC       net.HardwareAddr `usage:"employee MAC address"`
-	JointTime time.Time        `usage:"employee join time"`
-
-	Employer Company
-}
-
-func main() {
-	//default config
-	def := Employee{
-		Name:   "defName",
-		Addr:   "defAddr",
-		IPAddr: net.ParseIP("1.2.3.4"),
-		MAC:    net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66},
-		Employer: Company{
-			Name: "defCom",
-		},
-	}
-	_, prefix, _ := net.ParseCIDR("192.168.1.0/24")
-	def.Subnet = *prefix
-	def.JointTime, _ = time.Parse(time.DateTime, "2023-01-02 13:22:33")
-	cnf, err := shouchan.NewSConfCMDLine(&def, "")
-	if err != nil {
-		panic(err)
-	}
-	ferr, aerr := cnf.ReadwithCMDLine()
-	fmt.Printf("ferr %v,aerr %v\n", ferr, aerr)
-	fmt.Printf("final result is %+v\n", cnf.GetConf())
-}
-```
 Output:
 
 - Usage

@@ -111,7 +111,7 @@ func (cnf *SConf[T]) PrintUsage() {
 }
 
 func (cnf *SConf[T]) UsageStr(prefix string) string {
-	return cnf.filler.UsageStr("") + fmt.Sprintf("\n  %v: load configuration from the specified file\n        default:%v",
+	return cnf.filler.UsageStr("") + fmt.Sprintf("\n  %v: load configuration from the specified file\n        default:%v\n",
 		cnf.configFileFlagName, cnf.defConfFilePath)
 }
 

@@ -24,7 +24,7 @@ type Employee struct {
 	Subnet    net.IPNet        `usage:"employee IP subnet"`
 	MAC       net.HardwareAddr `usage:"employee MAC address"`
 	JointTime time.Time        `usage:"employee join time"`
-	IsRetired bool             `alias:"r", usage:"retired"`
+	IsRetired bool             `alias:"r" usage:"retired"`
 
 	Employer Company
 }

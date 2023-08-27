@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defCfgFileFlagName = "-cfgfromfile"
+	DefCfgFileFlagName = "-cfgfromfile"
 )
 
 type SConfInt interface {
@@ -24,18 +24,36 @@ type SConf[T any] struct {
 	conf               T
 	defConfFilePath    string //if this is empty, then there is no config file support
 	filler             *myflags.Filler
+	fillerOptions      []myflags.FillerOption
 	configFileFlagName string
 	parsedActs         []string
+	fillFlags          bool
 }
 
 type SconfOption[T any] func(ec *SConf[T])
 
+// WithFillOptions specifies options used to create myflags.Filler
+func WithFillOptions[T any](optlist []myflags.FillerOption) SconfOption[T] {
+	return func(ec *SConf[T]) {
+		ec.fillerOptions = optlist
+	}
+}
+
+// WithFillFlags specifies whether to fill flags
+func WithFillFlags[T any](fill bool) SconfOption[T] {
+	return func(ec *SConf[T]) {
+		ec.fillFlags = fill
+	}
+}
+
+// WithDefaultConfigFilePath specifies default config file path, if it is empty, then there is no reading from config file
 func WithDefaultConfigFilePath[T any](def string) SconfOption[T] {
 	return func(ec *SConf[T]) {
 		ec.defConfFilePath = def
 	}
 }
 
+// WithConfigFileFlagName sepcifies the flag name of loading config file, default is defined by const DefCfgFileFlagName
 func WithConfigFileFlagName[T any](name string) SconfOption[T] {
 	return func(ec *SConf[T]) {
 		ec.configFileFlagName = name
@@ -51,14 +69,21 @@ func NewSConf[T any](def T, name, usage string, options ...SconfOption[T]) (*SCo
 	}
 	r := new(SConf[T])
 	r.conf = def
-	r.configFileFlagName = defCfgFileFlagName
-	r.filler = myflags.NewFiller(name, usage)
+	r.fillFlags = true
+	r.configFileFlagName = DefCfgFileFlagName
 	for _, o := range options {
 		o(r)
 	}
-	err := r.filler.Fill(r.conf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fill flagset, %w", err)
+	if !r.fillFlags && r.defConfFilePath == "" {
+		return nil, fmt.Errorf("default config file path is empty but also not instructed to fill flags")
+	}
+	r.filler = myflags.NewFiller(name, usage, r.fillerOptions...)
+	if r.fillFlags {
+		err := r.filler.Fill(r.conf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fill flagset, %w", err)
+		}
+
 	}
 	r.filler.GetFlagset().Usage = r.PrintUsage
 	return r, nil

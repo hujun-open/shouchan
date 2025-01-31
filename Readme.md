@@ -20,6 +20,8 @@ include support following field types:
 
 Additional types could be supported by using `Register`, see [github.com/hujun-open/shouchantypes](https://github.com/hujun-open/shouchantypes) for example. 
 
+## curent release is `github.com/hujun-open/shouchan/v2`
+
 ## CLI & YAML Support
 
 - YAML: shouchan uses [extyaml](https://pkg.go.dev/github.com/hujun-open/extyaml) for YAML marshal and unmarshal 
@@ -35,30 +37,27 @@ Output:
 
 - Usage
 ```	
- .\test.exe -?
-flag provided but not defined: -?
+  .\test.exe --help
 shouchan example
-  - addr: employee address
-        default:defAddrPointer
-  - employer-name: company name
-        default:defCom
-  - ipaddr: employee IP address
-        default:1.2.3.4
-  - jointtime: employee join time
-        default:2023-01-02 13:22:33
-  - mac: employee MAC address
-        default:11:22:33:44:55:66
-  - n2addr:
-        default:1.1.1.1
-  - naddr:
-        default:2.2.2.2
-  - name: employee name
-        default:defName
-  - subnet: employee IP subnet
-        default:192.168.1.0/24
 
-  -cfgfromfile: load configuration from the specified file
-        default:test.yaml
+Usage:
+  example [flags]
+
+Flags:
+      --addr string            employee address (default "defAddrPointer")
+      --cfgfromfile string     config file path (default "test.yaml")
+      --employer-name string   company name (default "defCom")
+  -h, --help                   help for example
+      --ipaddr net.IP          employee IP address (default 1.2.3.4)
+      --jointtime time.Time    employee join time (default 2023-01-02 13:22:33)
+      --mac net.HardwareAddr   employee MAC address (default 11:22:33:44:55:66)
+      --n2addr                  (default 1.1.1.1)
+      --naddr                   (default 2.2.2.2)
+      --name string            employee name (default "defName")
+      --r                      retired
+      --subnet net.IPNet       employee IP subnet (default 192.168.1.0/24)
+ferr failed to open config file test.yaml, open test.yaml: The system cannot find the file specified.,aerr <nil>
+final result is &{Name:defName Addr:0xc000028ee0 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC IsRetired:false Employer:{Name:defCom}}
 ```    
 
 - no command line args, no config file, default is used
@@ -70,19 +69,19 @@ final result is &{Name:defName Addr:0xc0000528b0 Naddr:2.2.2.2 N2addr:1.1.1.1 IP
 
 - config file via "-f" command args, value from file take procedence
 ```
- .\test.exe -cfgfromfile cfg.yaml
+ .\test.exe --cfgfromfile cfg.yaml
 ferr <nil>,aerr <nil>
 final result is &{Name:nameFromFile Addr:0xc0000528b0 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
 ```
 - mix command line args and config file, args to override employee name:
 ```
-.\test.exe -cfgfromfile cfg.yaml -name nameFromArg
+.\test.exe --cfgfromfile cfg.yaml --name nameFromArg
 ferr <nil>,aerr <nil>
 final result is &{Name:nameFromArg Addr:0xc000088880 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromFile}}
 ```
 - mix command line args and config file, args to override company name:
 ```
-.\test.exe -cfgfromfile cfg.yaml -employer-name comFromArg
+.\test.exe --cfgfromfile cfg.yaml --employer-name comFromArg
 ferr <nil>,aerr <nil>
 final result is &{Name:nameFromFile Addr:0xc000104880 Naddr:2.2.2.2 N2addr:1.1.1.1 IPAddr:1.2.3.4 Subnet:{IP:192.168.1.0 Mask:ffffff00} MAC:11:22:33:44:55:66 JointTime:2023-01-02 13:22:33 +0000 UTC Employer:{Name:comFromArg}}
 ```

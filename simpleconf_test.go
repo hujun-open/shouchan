@@ -1,12 +1,14 @@
 package shouchan
 
 import (
-	"flag"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/hujun-open/myflags"
+	flag "github.com/hujun-open/pflag"
+
+	"github.com/hujun-open/myflags/v2"
+	_ "github.com/hujun-open/myflags/v2/types"
 )
 
 type company struct {
@@ -20,7 +22,7 @@ type testStruct struct {
 	NumList    []int
 	Act        struct {
 		NetName string
-	} `action:""`
+	} `action:"" usage:"testaction"`
 }
 
 func (t testStruct) isEqual(peer testStruct) bool {
@@ -51,11 +53,11 @@ type testSetup struct {
 
 func doTest(t *testing.T, setup testSetup) error {
 
-	options := []SconfOption[*testStruct]{}
-	options = append(options, WithDefaultConfigFilePath[*testStruct](setup.fpath))
-	options = append(options, WithFillFlags[*testStruct](!setup.dontDoFlag))
+	options := []SconfOption[testStruct]{}
+	options = append(options, WithDefaultConfigFilePath[testStruct](setup.fpath))
+	options = append(options, WithFillFlags[testStruct](!setup.dontDoFlag))
 	if setup.expectFail {
-		options = append(options, WithFillOptions[*testStruct]([]myflags.FillerOption{
+		options = append(options, WithFillOptions[testStruct]([]myflags.FillerOption{
 			myflags.WithFlagErrHandling(flag.ContinueOnError),
 		}))
 	}
@@ -95,7 +97,7 @@ func TestSconf(t *testing.T) {
 		{ // case 1, specify config file in args, result should be value from file
 			def:   defCnf,
 			fpath: "somenonexistingfilepath",
-			args:  []string{DefCfgFileFlagName, defpath},
+			args:  []string{"--" + DefCfgFileFlagName, defpath},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "nameFromFile",
@@ -116,7 +118,7 @@ func TestSconf(t *testing.T) {
 		{ // case 3, both args and file, arg should win
 			def:   defCnf,
 			fpath: defpath,
-			args:  []string{"-name", "nameFromArg", "-jointime", "2016-12-02 12:03:04"},
+			args:  []string{"--name", "nameFromArg", "--jointime", "2016-12-02 12:03:04"},
 			result: testStruct{
 				JoinTime: time.Date(2016, 12, 2, 12, 3, 4, 0, time.UTC),
 				Name:     "nameFromArg",
@@ -128,7 +130,7 @@ func TestSconf(t *testing.T) {
 		{ // case 4, mix arg and default, arg should win
 			def:   defCnf,
 			fpath: "",
-			args:  []string{"-name", "nameFromArg", "-employer-name", "argCom"},
+			args:  []string{"--name", "nameFromArg", "--employer-name", "argCom"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "nameFromArg",
@@ -138,7 +140,7 @@ func TestSconf(t *testing.T) {
 		{ // case 5, specify nonexist config file, result should be default
 			def:   defCnf,
 			fpath: defpath,
-			args:  []string{DefCfgFileFlagName, "dosntexist"},
+			args:  []string{"--" + DefCfgFileFlagName, "dosntexist"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "defName",
@@ -148,7 +150,7 @@ func TestSconf(t *testing.T) {
 		{ // case 6, specify nonexist config file and args, args should win
 			def:   defCnf,
 			fpath: defpath,
-			args:  []string{DefCfgFileFlagName, "dosntexist", "-addr", "addrFromArg"},
+			args:  []string{"--" + DefCfgFileFlagName, "dosntexist", "--addr", "addrFromArg"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "defName",
@@ -168,7 +170,7 @@ func TestSconf(t *testing.T) {
 		{ // case 8, action test, action arg from cli, rest from file
 			def:   defCnf,
 			fpath: defpath,
-			args:  []string{"act", "-netname", "disk1"},
+			args:  []string{"act", "--netname", "disk1"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "nameFromFile",
@@ -182,7 +184,7 @@ func TestSconf(t *testing.T) {
 			expectFail: true,
 			dontDoFlag: true,
 			fpath:      defpath,
-			args:       []string{"act", "-netname", "disk1"},
+			args:       []string{"act", "--netname", "disk1"},
 			result: testStruct{
 				JoinTime: time.Date(1999, 1, 2, 3, 4, 5, 0, time.UTC),
 				Name:     "nameFromFile",

@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/hujun-open/extyaml"
-	"github.com/hujun-open/myflags"
+	"github.com/hujun-open/myflags/v2"
 )
 
 // FromStr is the function convert a string into a instance of to-be-supported-type

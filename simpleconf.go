@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
+	"github.com/hujun-open/cobra"
 	"github.com/hujun-open/extyaml"
-	"github.com/hujun-open/myflags"
+	"github.com/hujun-open/myflags/v2"
 )
 
 const (
-	DefCfgFileFlagName = "-cfgfromfile"
+	DefCfgFileFlagName = "cfgfromfile"
 )
 
 type SConfInt interface {
@@ -20,42 +22,43 @@ type SConfInt interface {
 }
 
 // SConf represents a set of configurations as a struct
-type SConf[T any] struct {
-	conf               T
+type SConf[X any] struct {
+	conf               *X
 	defConfFilePath    string //if this is empty, then there is no config file support
-	filler             *myflags.Filler
+	parsedConfFilePath string
+	Filler             *myflags.Filler
 	fillerOptions      []myflags.FillerOption
 	configFileFlagName string
 	parsedActs         []string
 	fillFlags          bool
 }
 
-type SconfOption[T any] func(ec *SConf[T])
+type SconfOption[X any] func(ec *SConf[X])
 
 // WithFillOptions specifies options used to create myflags.Filler
-func WithFillOptions[T any](optlist []myflags.FillerOption) SconfOption[T] {
-	return func(ec *SConf[T]) {
+func WithFillOptions[X any](optlist []myflags.FillerOption) SconfOption[X] {
+	return func(ec *SConf[X]) {
 		ec.fillerOptions = optlist
 	}
 }
 
 // WithFillFlags specifies whether to fill flags
-func WithFillFlags[T any](fill bool) SconfOption[T] {
-	return func(ec *SConf[T]) {
+func WithFillFlags[X any](fill bool) SconfOption[X] {
+	return func(ec *SConf[X]) {
 		ec.fillFlags = fill
 	}
 }
 
 // WithDefaultConfigFilePath specifies default config file path, if it is empty, then there is no reading from config file
-func WithDefaultConfigFilePath[T any](def string) SconfOption[T] {
-	return func(ec *SConf[T]) {
+func WithDefaultConfigFilePath[X any](def string) SconfOption[X] {
+	return func(ec *SConf[X]) {
 		ec.defConfFilePath = def
 	}
 }
 
 // WithConfigFileFlagName sepcifies the flag name of loading config file, default is defined by const DefCfgFileFlagName
-func WithConfigFileFlagName[T any](name string) SconfOption[T] {
-	return func(ec *SConf[T]) {
+func WithConfigFileFlagName[X any](name string) SconfOption[X] {
+	return func(ec *SConf[X]) {
 		ec.configFileFlagName = name
 	}
 }
@@ -63,11 +66,11 @@ func WithConfigFileFlagName[T any](name string) SconfOption[T] {
 // NewSConf returns a new SConf instance,
 // def is a pointer to configruation struct with default value,
 // defpath is the default configuration file path, it could be overriden by using command line arg "-f", could be "" means no default path
-func NewSConf[T any](def T, name, usage string, options ...SconfOption[T]) (*SConf[T], error) {
+func NewSConf[X any](def *X, name, usage string, options ...SconfOption[X]) (*SConf[X], error) {
 	if reflect.TypeOf(def).Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("def is not a ptr")
 	}
-	r := new(SConf[T])
+	r := new(SConf[X])
 	r.conf = def
 	r.fillFlags = true
 	r.configFileFlagName = DefCfgFileFlagName
@@ -77,89 +80,114 @@ func NewSConf[T any](def T, name, usage string, options ...SconfOption[T]) (*SCo
 	if !r.fillFlags && r.defConfFilePath == "" {
 		return nil, fmt.Errorf("default config file path is empty but also not instructed to fill flags")
 	}
-	r.filler = myflags.NewFiller(name, usage, r.fillerOptions...)
+	r.Filler = myflags.NewFiller(name, usage, r.fillerOptions...)
 	if r.fillFlags {
-		err := r.filler.Fill(r.conf)
+		err := r.Filler.Fill(r.conf)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fill flagset, %w", err)
 		}
 
 	}
-	r.filler.GetFlagset().Usage = r.PrintUsage
+	if r.defConfFilePath != "" {
+		r.Filler.PersistentFlags().StringVar(&r.parsedConfFilePath, r.configFileFlagName, r.defConfFilePath, "config file path")
+	}
+	// r.filler.GetFlagset().Usage = r.PrintUsage
 	return r, nil
 }
 
-func (cnf *SConf[T]) getConfFilePath(args []string) (string, []string) {
-	for i, arg := range args {
-		if arg == cnf.configFileFlagName && i < len(args)-1 {
-			fpstr := args[i+1]
-			return fpstr, append(args[:i], args[i+2:]...)
-		}
+// disableCommands recursively disables all execution hooks for a command and its subcommands.
+// also disable the help output
+func disableCommands(cmd *cobra.Command) {
+	cmd.Run = myflags.DefRunMethod
+	cmd.RunE = func(cmd *cobra.Command, args []string) error { return nil }
+	cmd.PreRun = myflags.DefRunMethod
+	cmd.PreRunE = func(cmd *cobra.Command, args []string) error { return nil }
+	cmd.PostRun = myflags.DefRunMethod
+	cmd.PostRunE = func(cmd *cobra.Command, args []string) error { return nil }
+	cmd.SilenceUsage = true
+	cmd.SetHelpCommand(nil)
+	cmd.SetHelpFunc(func(*cobra.Command, []string) {})
+
+	for _, subCmd := range cmd.Commands() {
+		disableCommands(subCmd)
 	}
-	return "", args
 }
 
-func (cnf *SConf[T]) read(args []string) (actionerr, ferr, aerr error) {
-	ferr, aerr = cnf.Read(args)
-	return nil, ferr, aerr
+// clone create a new SConf instnace that inherit from cnf, but with new .conf filled,
+// so that it could be used by Read to get the configFileflag value without impacting the cnf.conf
+func (cnf *SConf[X]) clone() *SConf[X] {
+	newone := new(SConf[X])
+	*newone = *cnf
+	newone.conf = new(X)
+	*newone.conf = *cnf.conf
+
+	newone.Filler = myflags.NewFiller(cnf.Filler.Name(), cnf.Filler.UsageString(), newone.fillerOptions...)
+
+	err := newone.Filler.Fill(newone.conf)
+	if err != nil {
+		panic(err)
+	}
+
+	if newone.defConfFilePath != "" {
+		newone.Filler.PersistentFlags().StringVar(&newone.parsedConfFilePath, newone.configFileFlagName, newone.defConfFilePath, "config file path")
+	}
+	disableCommands(newone.Filler.Command)
+	return newone
+
 }
 
 // Read read configuration first from file, then flagset from args,
 // flagset will be read regardless if file read succeds,
 // ferr is error of file reading, aerr is error of flagset reading.
 // if there is ferr and/or aerr, it could be treated as non-fatal failure thanks to mix&match and priority support.
-func (cnf *SConf[T]) Read(args []string) (ferr, aerr error) {
+func (cnf *SConf[X]) Read(args []string) (ferr, aerr error) {
 	var buf []byte
-	var fpath string
 	newargs := args
 	if cnf.defConfFilePath != "" {
-		fpath, newargs = cnf.getConfFilePath(args)
-		if fpath == "" {
-			fpath = cnf.defConfFilePath
-		}
-		buf, ferr = os.ReadFile(fpath)
-		if ferr != nil {
-			ferr = fmt.Errorf("failed to open config file %v, %w", fpath, ferr)
-		} else {
-			ferr = cnf.UnmarshalYAML(buf)
+		tempcnf := cnf.clone()
+		tempcnf.Filler.SetArgs(args)
+		if nerr := tempcnf.Filler.Execute(); nerr == nil {
+			buf, ferr = os.ReadFile(tempcnf.parsedConfFilePath)
 			if ferr != nil {
-				ferr = fmt.Errorf("failed to decode %v as YAML, %w", fpath, ferr)
+				ferr = fmt.Errorf("failed to open config file %v, %w", tempcnf.parsedConfFilePath, ferr)
+			} else {
+				ferr = cnf.UnmarshalYAML(buf)
+				if ferr != nil {
+					ferr = fmt.Errorf("failed to decode %v as YAML, %w", tempcnf.parsedConfFilePath, ferr)
+				}
 			}
 		}
 	}
-	cnf.parsedActs, aerr = cnf.filler.ParseArgs(newargs)
+	cnf.Filler.SetArgs(newargs)
+	cmd, err := cnf.Filler.ExecuteC()
+	if err != nil {
+		aerr = err
+		return
+	}
+	cnf.parsedActs = strings.Fields(cmd.CommandPath())[1:]
 	return
 }
 
-func (cnf *SConf[T]) PrintUsage() {
-	fmt.Print(cnf.UsageStr(""))
-}
-
-func (cnf *SConf[T]) UsageStr(prefix string) string {
-	return cnf.filler.UsageStr("") + fmt.Sprintf("\n  %v: load configuration from the specified file\n        default:%v\n",
-		cnf.configFileFlagName, cnf.defConfFilePath)
-}
-
 // ReadCMDLine is same as Read, expcept the args is os.Args[1:]
-func (cnf *SConf[T]) ReadwithCMDLine() (ferr, aerr error) {
+func (cnf *SConf[X]) ReadwithCMDLine() (ferr, aerr error) {
 	return cnf.Read(os.Args[1:])
 }
 
 // MarshalYAML marshal config value into YAML
-func (cnf *SConf[T]) MarshalYAML() ([]byte, error) {
+func (cnf *SConf[X]) MarshalYAML() ([]byte, error) {
 	return extyaml.MarshalExt(cnf.conf)
 }
 
 // UnmarshalYAML unmrshal YAML encoded buf into config value
-func (cnf *SConf[T]) UnmarshalYAML(buf []byte) error {
+func (cnf *SConf[X]) UnmarshalYAML(buf []byte) error {
 	return extyaml.UnmarshalExt(buf, cnf.conf)
 }
 
 // GetConf returns config value
-func (cnf *SConf[T]) GetConf() T {
+func (cnf *SConf[X]) GetConf() *X {
 	return cnf.conf
 }
 
-func (cnf *SConf[T]) GetConfAny() any {
+func (cnf *SConf[X]) GetConfAny() any {
 	return cnf.conf
 }

@@ -31,7 +31,7 @@ refer to corresponding doc for details on CLI & YAML support.
 
 
 ## Example:
-https://github.com/hujun-open/shouchan/blob/809751e636ae1230134d11983523ec5d8a2b24e6/example/main.go#L1-L57
+https://github.com/hujun-open/shouchan/blob/6d6eda8b423d48cd7461804b4beb5c7693b6c3ba/example/main.go#L1-L63
 
 Output:
 

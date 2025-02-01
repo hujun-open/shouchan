@@ -1,7 +1,7 @@
 ![shouchan](./logo128.png)
 
 [![CI](https://github.com/hujun-open/shouchan/actions/workflows/main.yml/badge.svg)](https://github.com/hujun-open/shouchan/actions/workflows/main.yml)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/shouchan)](https://pkg.go.dev/github.com/hujun-open/shouchan)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/shouchan/v2)](https://pkg.go.dev/github.com/hujun-open/shouchan/v2)
 
 ## Overview
 Package shouchan provides simple configuration management for Golang application, with following features:

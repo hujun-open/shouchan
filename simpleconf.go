@@ -136,11 +136,12 @@ func (cnf *SConf[X]) clone() *SConf[X] {
 
 }
 
-// Read read configuration first from file, then flagset from args,
-// flagset will be read regardless if file read succeds,
-// ferr is error of file reading, aerr is error of flagset reading.
+// Read read configuration first from file, then from commandline args,
+// commandline args will be read regardless if file read succeds,
+// cmd is the command get executed,
+// ferr is error of file reading, aerr is error of commandline args reading.
 // if there is ferr and/or aerr, it could be treated as non-fatal failure thanks to mix&match and priority support.
-func (cnf *SConf[X]) Read(args []string) (ferr, aerr error) {
+func (cnf *SConf[X]) Read(args []string) (cmd *cobra.Command, ferr, aerr error) {
 	var buf []byte
 	newargs := args
 	if cnf.defConfFilePath != "" {
@@ -159,9 +160,9 @@ func (cnf *SConf[X]) Read(args []string) (ferr, aerr error) {
 		}
 	}
 	cnf.Filler.SetArgs(newargs)
-	cmd, err := cnf.Filler.ExecuteC()
-	if err != nil {
-		aerr = err
+	cmd, aerr = cnf.Filler.ExecuteC()
+	if aerr != nil {
+		cmd = nil
 		return
 	}
 	cnf.parsedActs = strings.Fields(cmd.CommandPath())[1:]
@@ -169,7 +170,7 @@ func (cnf *SConf[X]) Read(args []string) (ferr, aerr error) {
 }
 
 // ReadCMDLine is same as Read, expcept the args is os.Args[1:]
-func (cnf *SConf[X]) ReadwithCMDLine() (ferr, aerr error) {
+func (cnf *SConf[X]) ReadwithCMDLine() (cmd *cobra.Command, ferr, aerr error) {
 	return cnf.Read(os.Args[1:])
 }
 

@@ -57,7 +57,9 @@ func main() {
 		panic(err)
 	}
 
-	ferr, aerr := cnf.ReadwithCMDLine()
+	cmd, ferr, aerr := cnf.ReadwithCMDLine()
+	fmt.Printf("command get executed is %v\n", cmd.Name())
 	fmt.Printf("ferr %v,aerr %v\n", ferr, aerr)
 	fmt.Printf("final result is %+v\n", cnf.GetConf())
+
 }

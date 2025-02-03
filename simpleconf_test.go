@@ -65,7 +65,7 @@ func doTest(t *testing.T, setup testSetup) error {
 	if err != nil {
 		return err
 	}
-	ferr, aerr := cnf.Read(setup.args)
+	_, ferr, aerr := cnf.Read(setup.args)
 	t.Logf("ferr is %v, aerr is %v", ferr, aerr)
 	t.Logf("result conf is %+v", cnf.GetConf())
 	if !cnf.GetConf().isEqual(setup.result) {

@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hujun-open/cobra"
 	"github.com/hujun-open/extyaml"
 	"github.com/hujun-open/myflags/v2"
+	"github.com/spf13/cobra"
 )
 
 const (

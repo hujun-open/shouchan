@@ -3,7 +3,6 @@ package shouchan
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/hujun-open/extyaml"
@@ -24,6 +23,7 @@ type SConfInt interface {
 // SConf represents a set of configurations as a struct
 type SConf[X any] struct {
 	conf               *X
+	defaults           *X     // snapshot of def, restored at the start of every Read
 	defConfFilePath    string //if this is empty, then there is no config file support
 	parsedConfFilePath string
 	Filler             *myflags.Filler
@@ -67,8 +67,8 @@ func WithConfigFileFlagName[X any](name string) SconfOption[X] {
 // def is a pointer to configruation struct with default value,
 // defpath is the default configuration file path, it could be overriden by using command line arg "-f", could be "" means no default path
 func NewSConf[X any](def *X, name, usage string, options ...SconfOption[X]) (*SConf[X], error) {
-	if reflect.TypeOf(def).Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("def is not a ptr")
+	if def == nil {
+		return nil, fmt.Errorf("def is nil")
 	}
 	r := new(SConf[X])
 	r.conf = def
@@ -89,51 +89,50 @@ func NewSConf[X any](def *X, name, usage string, options ...SconfOption[X]) (*SC
 
 	}
 	if r.defConfFilePath != "" {
+		if r.Filler.PersistentFlags().Lookup(r.configFileFlagName) != nil {
+			return nil, fmt.Errorf("config file flag name %q collides with an existing flag", r.configFileFlagName)
+		}
 		r.Filler.PersistentFlags().StringVar(&r.parsedConfFilePath, r.configFileFlagName, r.defConfFilePath, "config file path")
 	}
-	// r.filler.GetFlagset().Usage = r.PrintUsage
+	r.defaults = new(X)
+	cloneInto(reflectValue(r.defaults), reflectValue(r.conf))
 	return r, nil
 }
 
-// disableCommands recursively disables all execution hooks for a command and its subcommands.
-// also disable the help output
-func disableCommands(cmd *cobra.Command) {
-	cmd.Run = myflags.DefRunMethod
-	cmd.RunE = func(cmd *cobra.Command, args []string) error { return nil }
-	cmd.PreRun = myflags.DefRunMethod
-	cmd.PreRunE = func(cmd *cobra.Command, args []string) error { return nil }
-	cmd.PostRun = myflags.DefRunMethod
-	cmd.PostRunE = func(cmd *cobra.Command, args []string) error { return nil }
-	cmd.SilenceUsage = true
-	cmd.SetHelpCommand(nil)
-	cmd.SetHelpFunc(func(*cobra.Command, []string) {})
-
-	for _, subCmd := range cmd.Commands() {
-		disableCommands(subCmd)
+// configFileFromArgs returns the config file selected by args.
+// Only the config-file flag is read. Every other argument is ignored, so a
+// bad flag cannot skip loading the file or write into the config struct.
+func (cnf *SConf[X]) configFileFromArgs(args []string) string {
+	path := cnf.defConfFilePath
+	if cnf.configFileFlagName == "" {
+		return path
 	}
+	long := "--" + cnf.configFileFlagName
+	prefix := long + "="
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		switch {
+		case arg == long:
+			if i+1 >= len(args) {
+				return cnf.defConfFilePath
+			}
+			i++
+			path = args[i]
+		case strings.HasPrefix(arg, prefix):
+			path = arg[len(prefix):]
+		}
+	}
+	return path
 }
 
-// clone create a new SConf instnace that inherit from cnf, but with new .conf filled,
-// so that it could be used by Read to get the configFileflag value without impacting the cnf.conf
-func (cnf *SConf[X]) clone() *SConf[X] {
-	newone := new(SConf[X])
-	*newone = *cnf
-	newone.conf = new(X)
-	*newone.conf = *cnf.conf
-
-	newone.Filler = myflags.NewFiller(cnf.Filler.Name(), cnf.Filler.UsageString(), newone.fillerOptions...)
-
-	err := newone.Filler.Fill(newone.conf)
-	if err != nil {
-		panic(err)
+func (cnf *SConf[X]) resetToDefaults() {
+	if cnf.defaults == nil || cnf.conf == nil {
+		return
 	}
-
-	if newone.defConfFilePath != "" {
-		newone.Filler.PersistentFlags().StringVar(&newone.parsedConfFilePath, newone.configFileFlagName, newone.defConfFilePath, "config file path")
-	}
-	disableCommands(newone.Filler.Command)
-	return newone
-
+	cloneInto(reflectValue(cnf.conf), reflectValue(cnf.defaults))
 }
 
 // Read read configuration first from file, then from commandline args,
@@ -142,24 +141,17 @@ func (cnf *SConf[X]) clone() *SConf[X] {
 // ferr is error of file reading, aerr is error of commandline args reading.
 // if there is ferr and/or aerr, it could be treated as non-fatal failure thanks to mix&match and priority support.
 func (cnf *SConf[X]) Read(args []string) (cmd *cobra.Command, ferr, aerr error) {
-	var buf []byte
-	newargs := args
+	cnf.resetToDefaults()
 	if cnf.defConfFilePath != "" {
-		tempcnf := cnf.clone()
-		tempcnf.Filler.SetArgs(args)
-		if nerr := tempcnf.Filler.Execute(); nerr == nil {
-			buf, ferr = os.ReadFile(tempcnf.parsedConfFilePath)
-			if ferr != nil {
-				ferr = fmt.Errorf("failed to open config file %v, %w", tempcnf.parsedConfFilePath, ferr)
-			} else {
-				ferr = cnf.UnmarshalYAML(buf)
-				if ferr != nil {
-					ferr = fmt.Errorf("failed to decode %v as YAML, %w", tempcnf.parsedConfFilePath, ferr)
-				}
-			}
+		path := cnf.configFileFromArgs(args)
+		buf, err := os.ReadFile(path)
+		if err != nil {
+			ferr = fmt.Errorf("failed to open config file %v, %w", path, err)
+		} else if err = cnf.UnmarshalYAML(buf); err != nil {
+			ferr = fmt.Errorf("failed to decode %v as YAML, %w", path, err)
 		}
 	}
-	cnf.Filler.SetArgs(newargs)
+	cnf.Filler.SetArgs(args)
 	cmd, aerr = cnf.Filler.ExecuteC()
 	if aerr != nil {
 		cmd = nil
@@ -179,9 +171,17 @@ func (cnf *SConf[X]) MarshalYAML() ([]byte, error) {
 	return extyaml.MarshalExt(cnf.conf)
 }
 
-// UnmarshalYAML unmrshal YAML encoded buf into config value
+// UnmarshalYAML unmrshal YAML encoded buf into config value.
+// Fields present in buf replace the current value. Omitted fields are left as they are.
 func (cnf *SConf[X]) UnmarshalYAML(buf []byte) error {
-	return extyaml.UnmarshalExt(buf, cnf.conf)
+	if len(strings.TrimSpace(string(buf))) == 0 {
+		return nil
+	}
+	fresh := new(X)
+	if err := extyaml.UnmarshalExt(buf, fresh); err != nil {
+		return err
+	}
+	return mergeYAML(reflectValue(cnf.conf), reflectValue(fresh), buf)
 }
 
 // GetConf returns config value

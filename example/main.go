@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"time"
 
 	"github.com/hujun-open/myflags/v2"
@@ -58,8 +59,12 @@ func main() {
 	}
 
 	cmd, ferr, aerr := cnf.ReadwithCMDLine()
-	fmt.Printf("command get executed is %v\n", cmd.Name())
 	fmt.Printf("ferr %v,aerr %v\n", ferr, aerr)
+	if cmd != nil {
+		fmt.Printf("command get executed is %v\n", cmd.Name())
+	}
 	fmt.Printf("final result is %+v\n", cnf.GetConf())
-
+	if aerr != nil {
+		os.Exit(1)
+	}
 }

@@ -1,7 +1,10 @@
 package shouchan
 
 import (
+	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -227,4 +230,251 @@ func TestSconf(t *testing.T) {
 
 	}
 
+}
+
+func discardOutput[X any](cnf *SConf[X]) {
+	cnf.Filler.SetOut(&bytes.Buffer{})
+	cnf.Filler.SetErr(&bytes.Buffer{})
+}
+
+func writeYAML(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "cfg.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestNilDefReturnsError(t *testing.T) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("NewSConf panicked on a nil config pointer: %v", rec)
+		}
+	}()
+	var def *struct{ Name string }
+	if _, err := NewSConf(def, "app", "usage"); err == nil {
+		t.Fatal("expected an error when def is nil")
+	}
+}
+
+func TestYAMLReplacesSlicesAndMaps(t *testing.T) {
+	type cfg struct {
+		NumList []int
+		Tags    map[string]string
+	}
+	path := writeYAML(t, "numlist: [9]\ntags:\n  a: file\n")
+	def := cfg{
+		NumList: []int{1, 2, 3},
+		Tags:    map[string]string{"a": "default", "b": "stale"},
+	}
+	cnf, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[cfg](path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	if _, ferr, aerr := cnf.Read(nil); ferr != nil || aerr != nil {
+		t.Fatalf("ferr=%v aerr=%v", ferr, aerr)
+	}
+	got := cnf.GetConf()
+	if len(got.NumList) != 1 || got.NumList[0] != 9 {
+		t.Fatalf("NumList = %#v, want [9]", got.NumList)
+	}
+	if len(got.Tags) != 1 || got.Tags["a"] != "file" {
+		t.Fatalf("Tags = %#v, want map[a:file]", got.Tags)
+	}
+
+	emptyPath := writeYAML(t, "numlist: []\n")
+	def = cfg{NumList: []int{1, 2, 3}}
+	cnf, err = NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[cfg](emptyPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	if _, ferr, aerr := cnf.Read(nil); ferr != nil || aerr != nil {
+		t.Fatalf("empty slice ferr=%v aerr=%v", ferr, aerr)
+	}
+	if got := cnf.GetConf().NumList; len(got) != 0 {
+		t.Fatalf("empty YAML list left NumList = %#v", got)
+	}
+}
+
+func TestDisabledFlagsDoNotPanic(t *testing.T) {
+	type cfg struct {
+		Name string
+		Bad  []struct{ N int }
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("Read panicked with flag filling disabled: %v", rec)
+		}
+	}()
+	path := writeYAML(t, "name: fromfile\n")
+	def := cfg{Name: "def"}
+	cnf, err := NewSConf(&def, "app", "usage",
+		WithDefaultConfigFilePath[cfg](path),
+		WithFillFlags[cfg](false),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ferr, aerr := cnf.Read(nil)
+	if ferr != nil || aerr != nil {
+		t.Fatalf("ferr=%v aerr=%v", ferr, aerr)
+	}
+	if cnf.GetConf().Name != "fromfile" {
+		t.Fatalf("Name = %q, want fromfile", cnf.GetConf().Name)
+	}
+}
+
+func TestDisabledFlagsDoNotMutateSharedPointers(t *testing.T) {
+	type cfg struct {
+		Name string
+		Note *string
+	}
+	path := writeYAML(t, "name: fromfile\n")
+	note := "default"
+	def := cfg{Name: "def", Note: &note}
+	cnf, err := NewSConf(&def, "app", "usage",
+		WithDefaultConfigFilePath[cfg](path),
+		WithFillFlags[cfg](false),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ferr, _ := cnf.Read([]string{"--note", "sneaky"})
+	if ferr != nil {
+		t.Fatalf("file error: %v", ferr)
+	}
+	if cnf.GetConf().Name != "fromfile" {
+		t.Fatalf("Name = %q, want fromfile", cnf.GetConf().Name)
+	}
+	if got := *cnf.GetConf().Note; got != "default" {
+		t.Fatalf("Note = %q, want default; flag filling is disabled", got)
+	}
+}
+
+func TestFileLoadsWhenArgParseFails(t *testing.T) {
+	type cfg struct {
+		Name string `required:""`
+		Addr string
+	}
+	path := writeYAML(t, "name: fromfile\naddr: fromfile\n")
+	def := cfg{Name: "def", Addr: "def"}
+	cnf, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[cfg](path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	_, ferr, aerr := cnf.Read(nil)
+	if ferr != nil {
+		t.Fatalf("file error: %v", ferr)
+	}
+	if aerr == nil {
+		t.Fatal("expected a missing-required-flag error")
+	}
+	if cnf.GetConf().Addr != "fromfile" || cnf.GetConf().Name != "fromfile" {
+		t.Fatalf("file was skipped: %+v", cnf.GetConf())
+	}
+}
+
+func TestFileLoadsWhenFlagValueMissing(t *testing.T) {
+	type plain struct {
+		Name string
+		Addr string
+	}
+	path := writeYAML(t, "name: fromfile\naddr: fromfile\n")
+	def := plain{Name: "def", Addr: "def"}
+	cnf, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[plain](path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	_, ferr, aerr := cnf.Read([]string{"--name"}) // value missing
+	if ferr != nil {
+		t.Fatalf("file error: %v", ferr)
+	}
+	if aerr == nil {
+		t.Fatal("expected an argument error")
+	}
+	if cnf.GetConf().Addr != "fromfile" {
+		t.Fatalf("Addr = %q, want fromfile", cnf.GetConf().Addr)
+	}
+}
+
+func TestSecondReadDropsStaleFileValues(t *testing.T) {
+	type plain struct {
+		Name string
+		Addr string
+	}
+	dir := t.TempDir()
+	first := filepath.Join(dir, "a.yaml")
+	second := filepath.Join(dir, "b.yaml")
+	if err := os.WriteFile(first, []byte("name: A\naddr: A\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte("name: B\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	def := plain{Name: "def", Addr: "def"}
+	cnf, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[plain](first))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	if _, ferr, aerr := cnf.Read(nil); ferr != nil || aerr != nil {
+		t.Fatalf("first read ferr=%v aerr=%v", ferr, aerr)
+	}
+	if _, ferr, aerr := cnf.Read([]string{"--" + DefCfgFileFlagName, second}); ferr != nil || aerr != nil {
+		t.Fatalf("second read ferr=%v aerr=%v", ferr, aerr)
+	}
+	got := cnf.GetConf()
+	if got.Name != "B" || got.Addr != "def" {
+		t.Fatalf("after second file, Name=%q Addr=%q, want Name=B Addr=def", got.Name, got.Addr)
+	}
+}
+
+func TestCLIOverridesPointerFieldsAfterYAML(t *testing.T) {
+	type inner struct {
+		Name string
+	}
+	type cfg struct {
+		Addr     *string
+		Employer *inner
+	}
+	path := writeYAML(t, "addr: fromfile\nemployer:\n  name: filecom\n")
+	addr := "defaddr"
+	employer := &inner{Name: "defcom"}
+	def := cfg{Addr: &addr, Employer: employer}
+	cnf, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[cfg](path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	discardOutput(cnf)
+	_, ferr, aerr := cnf.Read([]string{"--addr", "fromcli", "--employer-name", "clicom"})
+	if ferr != nil || aerr != nil {
+		t.Fatalf("ferr=%v aerr=%v", ferr, aerr)
+	}
+	got := cnf.GetConf()
+	if got.Addr != &addr || *got.Addr != "fromcli" {
+		t.Fatalf("Addr = %q, pointer preserved = %v", *got.Addr, got.Addr == &addr)
+	}
+	if got.Employer != employer || got.Employer.Name != "clicom" {
+		t.Fatalf("Employer = %+v, pointer preserved = %v", got.Employer, got.Employer == employer)
+	}
+}
+
+func TestConfigFlagNameCollisionReturnsError(t *testing.T) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("NewSConf panicked on a flag name collision: %v", rec)
+		}
+	}()
+	def := struct {
+		CfgFromFile string
+	}{}
+	_, err := NewSConf(&def, "app", "usage", WithDefaultConfigFilePath[struct{ CfgFromFile string }]("cfg.yaml"))
+	if err == nil {
+		t.Fatal("expected an error when a field flag is also named cfgfromfile")
+	}
 }
